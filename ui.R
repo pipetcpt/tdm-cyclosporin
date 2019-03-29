@@ -39,13 +39,13 @@ shiny::navbarPage(
           textInput("pid","", value = "003866", width = NULL, placeholder = NULL)),
       #tags$hr(),
       box(title = "Information", status = "primary",width = NULL,solidHeader = TRUE,
-          numericInput("total_bilirubin", "Total Bilirubin (mg/dL)", 0.9, min = NA, max = NA, step = 0.1,
+          numericInput("total_bilirubin", "Total Bilirubin (mg/dL)", 3.0, min = NA, max = NA, step = 0.1,
                        width = NULL), 
           numericInput("post_op_date", "POD, Post OP date (day)", 3, min = NA, max = NA, 
                        step = 0.5,
                        width = NULL), 
-          numericInput("age", "Age (year)", 40,min = NA, max = NA, step = 1),
-          numericInput("weight", "Weight (kg)", 70, min = NA, max = NA, step = 0.1)
+          numericInput("age", "Age (year)", 50,min = NA, max = NA, step = 1),
+          numericInput("weight", "Weight (kg)", 60, min = NA, max = NA, step = 0.1)
       )
     ),
     column(width=4,
@@ -73,7 +73,7 @@ shiny::navbarPage(
                                   'text/comma-separated-values,text/plain', 
                                   '.csv')),
                tags$hr(),
-               selectInput("rt", "Administration Route", c("IV Infusion"), selected = NULL, multiple = FALSE,
+               selectInput("rt", "Administration Route", c("Oral administration"), selected = NULL, multiple = FALSE,
                            selectize = TRUE, width = NULL, size = NULL)
            ) ,
            tags$hr(),
@@ -113,9 +113,9 @@ shiny::navbarPage(
       conditionalPanel(
         condition = "input.Observations == 1", 
         box(width = NULL , solidHeader = TRUE, title="First Observation",
-            numericInput("obsc", "Observed Concentration (mg/L)", 1000, min = NA, max = NA, step = NA,
+            numericInput("obsc", "Observed Concentration (mg/L)", 100, min = NA, max = NA, step = NA,
                          width = NULL),
-            dateInput("obsDate", "Date", value = "2017-05-05", min = NULL, max = NULL,
+            dateInput("obsDate", "Date", value = "2019-03-05", min = NULL, max = NULL,
                       format = "yyyy-mm-dd", startview = "month", weekstart = 1,
                       language = "en", width = NULL),
             timeInput("obsTime", "Time", value = strptime("10:30", "%R"), seconds = FALSE)
@@ -144,7 +144,6 @@ shiny::navbarPage(
   ),
   
   # Chapter 4. PK profile 1 `main` ----
-  
   tabPanel(
     icon = icon("line-chart"),
     title = "PK profile 1", 
@@ -161,34 +160,36 @@ shiny::navbarPage(
     ),
     column(width=9,
            box(width = NULL, status = "primary", title="",
-               plotOutput("plotCONC", height="700px")))
+               plotOutput("plotCONC", 
+                          width = '800px', height="500px")),
+           p('* Ctrough: 50 - 200 ng/mL is desired.'))
   ),
   
   # Chapter 5. PK profile 2 `main2` ----
-  
   tabPanel(
     icon = icon("line-chart"),
     title = "PK profile 2", 
     tabName="main2",
     column(
       width=3,
-      box( width = NULL, status="warning", solidHeader = TRUE, title = "",
-           sliderInput("newdose", "Next dose (mg)", 1000, min = 0, max = 2000, step = 250,ticks=TRUE,
+      box(width = NULL, status="warning", solidHeader = TRUE, title = "",
+           sliderInput("newdose", "Next dose (mg)", 50, min = 0, max = 1000, step = 50,ticks=TRUE,
                        width = NULL)),
-      box( width = NULL, status="warning", solidHeader = TRUE, title = "",
-           sliderInput("newtau", "New dosing interval (hours)", 12, min = 4, max = 48, step = 4,
+      box(width = NULL, status="warning", solidHeader = TRUE, title = "",
+           sliderInput("newtau", "New dosing interval (hours)", 24, min = 4, max = 48, step = 4,
                        width = NULL)),
       tags$hr(),
-      box( width=NULL, solidHeader = TRUE, title='',status="primary",
-           sliderInput("ll", "trough levels (mg/L)", 100, min = 0, max = 5000, step = 100,
+      box(width=NULL, solidHeader = TRUE, title='',status="primary",
+           sliderInput("ll", "trough levels (mg/L)", 50, min = 0, max = 500, step = 50,
                        width = NULL),
-           sliderInput("ul", "peak levels (mg/L)", 500, min = 0, max = 5000, step = 100,
+           sliderInput("ul", "peak levels (mg/L)", 200, min = 0, max = 500, step = 50,
                        width = NULL))
     ),
     column(width=9,
            box(width = NULL, status = "primary", title="",
-               plotOutput("plotCONC2",  height="700px")))
-    
+               plotOutput("plotCONC2", 
+                          width = '800px', height="500px")),
+           p('* Ctrough : 50 - 200 ng/mL is desired. A solid blue line represents the starting time point with the new dosing regimen (tau and dose). '))
   )
   # End ----  
 )

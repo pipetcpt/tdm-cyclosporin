@@ -1,21 +1,20 @@
 # setup ----
 
 calculate_clearance <- function(WEIGHT, AGE, TBIL, POD_week){
-  TVCL <- 28.5 - 1.24*POD_week - 0.252*(TBIL-10) + 0.188*(WEIGHT-60) - 0.191*(AGE - 40)
+  TVCL <- 28.5 - 1.24*POD_week - 0.252*(TBIL-10) + 0.188*(WEIGHT-60) - 0.191*(AGE - 40) # L/h
 }
+TVV1 <- 133.00 # L
+TVKA <-   1.28 # /h
 
-TVV1 <- 133.00
-TVKA <-   1.28
-    
 default_dose_example_csv <- '"Date","Dosing_Time","Route","Dose"
-"17.05.03","10:30","PO","750"
-"17.05.04","10:30","PO","750"
-"17.05.04","22:30","PO","500"'
+"19.03.02","10:30","PO","100"
+"19.03.03","10:30","PO","100"
+"19.03.04","10:30","PO","100"'
 
 input <- list( # These values should be defined in ui.R.
   sex = 'male',
   obsc = 1000, # ng/mL 
-  obsDate = "2017-05-05", 
+  obsDate = "2019-03-05", 
   obsTime = strptime("10:30", "%R"),
   weight = 60,
   Observations = '1',
@@ -61,16 +60,16 @@ cmat=function(vec){
 
 shiny::shinyServer(function(input, output) {
   
-  # chapter 1. downloadData ----
+  # downloadData ----
   
   output$downloadData <- downloadHandler(
     filename <- function() { paste("dose_example", '.csv', sep='') },
     content <- function(file) {
-      write.csv(datasetInput(), file, row.names = F)
+      write_csv(datasetInput(), file)
     }
   )
   
-  # Chapter 2. dosing_history_contents ----
+  # dosing_history_contents ----
   output$dosing_history_contents <- renderTable({
     if (is.null(input$file1)) return(read_csv(default_dose_example_csv,
                                               col_types = 'cccd'))
@@ -78,7 +77,7 @@ shiny::shinyServer(function(input, output) {
                     col_types = 'cccd'))
   })
   
-  # Chapter 3. creatinine_clearance ----
+  # creatinine_clearance ----
   # crcl: https://www.mdcalc.com/creatinine-clearance-cockcroft-gault-equation
   output$typical_values <- renderTable({
     # Typical Values of Population PK parameters
@@ -87,46 +86,37 @@ shiny::shinyServer(function(input, output) {
     return(tibble(`CL/F (L/h)` = TVCL, `V/F (L)` = TVV1, `Ka (/hr)` = TVKA))
   })
   
-  # Chapter 4. output_table1_time_predicted_concentration ----
+  # output_table1_time_predicted_concentration ----
   output$output_table1_time_predicted_concentration <- renderTable({
     sim_data_output <- sim.data()
     prtx_predicted_concentration <- sim_data_output$table1
     return(prtx_predicted_concentration)
   })
   
-  # Chapter 5. outputtable2 ----
+  # outputtable2 ----
   output$outputtable2 <- renderTable({
     sim_data_output <- sim.data()
     prtx_predicted_concentration <- sim_data_output$table2
     return(prtx_predicted_concentration)
   })
   
-  # Chapter 6. outputtable3 ----
-  output$outputtable3 <- renderTable({
-    prt1=sim.data()
-    prt2=prt1[complete.cases(prt1),]
-    if(input$Observations=='1'){
-    }
-    if (input$Observations=='2')
-    {
-      prtx=prt2[2,c("CL","V1","V2")]
-      return(prtx)
-    }
-  })
+  # # outputtable3 ----
+  # output$outputtable3 <- renderTable({
+  #   prt1=sim.data()
+  #   prt2=prt1[complete.cases(prt1),]
+  #   if(input$Observations=='1'){
+  #   }
+  #   if (input$Observations=='2')
+  #   {
+  #     prtx=prt2[2,c("CL","V1","V2")]
+  #     return(prtx)
+  #   }
+  # })
   
   # prelude 1. datasetInput ----
   
   datasetInput <- reactive({
-    coln=c("Date","Inf_st_Time","Inf_ed_Time","Dose" )
-    dat1=c("17.05.03", "10:30", "11:30","500")
-    dat2=c("17.05.03", "22:30", "23:30","500")
-    dat3=c("17.05.04", "10:30", "11:30","1000")
-    dat4=c("17.05.04", "22:30", "23:30","1000")
-    
-    suppl <- data.frame (rbind(dat1,dat2,dat3,dat4))
-    colnames(suppl)<-coln
-    rownames(suppl)<-NULL
-    suppl
+    return(read_csv(default_dose_example_csv, col_types = 'cccd'))
   })
   
   # prelude 2. dose.data ----
@@ -144,13 +134,26 @@ shiny::shinyServer(function(input, output) {
   sim.data <- reactive({
     
     # prelude 3. sim.data ----
+    input_file_text <- ifelse(is.null(input$file1), 
+                              yes = default_dose_example_csv, 
+                              no = input$file1$datapath)
+    
+    rawdata <- read_csv(input_file_text, col_types = 'cccd') %>% 
+      as.data.frame() %>% 
+      print()
     
     # input: Observation
     obs1conc <- input$obsc
-    obs1time <- input$obst
-    obs1dat  <- input$obsd
+    obs1time <- input$obsTime
+    obs1date <- input$obsDate
     
-    # input: Demog
+    observation_data <- tibble(
+      date_time_lubridate = ymd_hms(sprintf('%sT%s', 
+                                            obs1date, 
+                                            substr(obs1time, 12, 20))),
+      Dose = NA,
+      Concentration = obs1conc
+    )
     
     # Typical Values
     
@@ -167,15 +170,7 @@ shiny::shinyServer(function(input, output) {
     # Eps (Sigma)
     EPS1SD <- 40      # Vancomycin Additive residual error   
     EPS2SD <- 0.1     # Vancomycin Proportional residual error
-    EPS2SDsq=(EPS2SD)^2 # Vancomycin square
-    
-    input_file_text <- ifelse(is.null(input$file1), 
-                              yes = default_dose_example_csv, 
-                              no = input$file1$datapath)
-    
-    rawdata <- read_csv(input_file_text, col_types = 'cccd') %>% 
-      as.data.frame() %>% 
-      print()
+    EPS2SDsq <- (EPS2SD)^2 # Vancomycin square
     
     dosing_data <- rawdata %>% 
       mutate(date_time = sprintf('%sT%s', Date, Dosing_Time)) %>% 
@@ -183,13 +178,6 @@ shiny::shinyServer(function(input, output) {
       mutate(Concentration = NA) %>% 
       select(date_time_lubridate, Dose, Concentration) %>% 
       as_tibble() %>% 
-      print()
-    
-    observation_data <- tibble(date_time_lubridate = ymd_hms(sprintf('%sT%s', 
-                                                                     input$obsDate, 
-                                                                     substr(input$obsTime, 12, 20))),
-                               Dose = NA,
-                               Concentration = input$obsc) %>% 
       print()
     
     Dose_Concentration <- bind_rows(dosing_data, observation_data) %>% 
@@ -280,7 +268,6 @@ shiny::shinyServer(function(input, output) {
                             method="L-BFGS-B", 
                             control = list(trace=TRUE,REPORT=TRUE))
         print(FIT$par)
-        
       }
     )
     
@@ -305,8 +292,6 @@ shiny::shinyServer(function(input, output) {
     outs$V1 <- TVV1*(exp(FIT$par[2]))    #predicted V2
     
     outs2=merge(x=outs,y=DOSEdata, by="time",all.x=TRUE)
-    head(outs2);tail(outs2)
-    outs2 %>% as_tibble()
     
     table1_raw <- tibble(time = pointtime,
                          obs_conc = outs %>% 
@@ -319,10 +304,14 @@ shiny::shinyServer(function(input, output) {
     cyclosporine_pk_plot <- outs2 %>% 
       as_tibble() %>% 
       ggplot(aes(time, DV*1000)) + 
-      geom_point(data = table1_raw, aes(x=pointtime, y=pred_conc, color = 'Predicted')) + 
-      geom_point(data = table1_raw, aes(x=pointtime, y=obs_conc, color = 'Observed')) + 
-      geom_line(alpha = 0.5) +
-      geom_hline(yintercept = c(50, 200), color = 'red') +
+      geom_point(data = table1_raw, 
+                 aes(x=pointtime, y=pred_conc, color = 'Predicted'), 
+                 size=4, alpha=0.5) + 
+      geom_point(data = table1_raw, 
+                 aes(x=pointtime, y=obs_conc, color = 'Observed'), 
+                 size=4, alpha=0.5) + 
+      geom_line(alpha = 0.8) +
+      # geom_hline(yintercept = c(50, 200), color = 'red') +
       labs(x = 'Time (hour)', y = 'Cyclosporine concentration (ng/mL)',
            title = 'Oral administration of cyclosporine - surgical use',
            subtitle = 'Therapeutic Drug Monitoring',
@@ -333,8 +322,8 @@ shiny::shinyServer(function(input, output) {
     sim_data_output <- list(
       FIT = FIT,
       table1 = table1_raw %>% select(`time (h)` = 1,
-                                     `observed conc. (mg/L)` = 2,
-                                     `predicted conc. (mg/L)` = 3),
+                                     `observed conc. (ng/mL)` = 2,
+                                     `predicted conc. (ng/mL)` = 3),
       table2 = tibble(`CL/F (L/h)` = TVCL*(exp(FIT$par[1])),
                       `V/F (L)` = TVV1*(exp(FIT$par[2]))),
       plot1 = cyclosporine_pk_plot,
@@ -345,11 +334,13 @@ shiny::shinyServer(function(input, output) {
     return(sim_data_output)
   })
   
+  # plot 1 ----
   output$plotCONC <- renderPlot({
     sim_data_output <- sim.data()
     return(sim_data_output$plot1)
-  })
+  }, res = 100)
   
+  # plot 2 ----
   output$plotCONC2 <- renderPlot({
     sim_data_output <- sim.data()
     
@@ -384,21 +375,19 @@ shiny::shinyServer(function(input, output) {
     cyclosporine_dose_adjustment_plot <- outs_future %>% 
       as_tibble() %>% 
       ggplot(aes(time, DV*1000)) + 
-      #geom_point(data = table1_raw, aes(x=pointtime, y=pred_conc, color = 'Predicted')) + 
-      #geom_point(data = table1_raw, aes(x=pointtime, y=obs_conc, color = 'Observed')) + 
       geom_line(alpha = 0.5) +
-      geom_hline(yintercept = input$ul, color = 'red') +
-      geom_hline(yintercept = input$ll, color = 'blue') +
+      # geom_hline(yintercept = input$ul, color = 'red') +
+      # geom_hline(yintercept = input$ll, color = 'blue') +
+      geom_vline(xintercept = last_dose_actual_time, color = 'red', alpha = 0.3) +
       labs(x = 'Time (hour)', y = 'Cyclosporine concentration (ng/mL)',
            title = 'Oral administration of cyclosporine - surgical use',
            subtitle = 'Therapeutic Drug Monitoring',
            color = 'Cyclosporine (ng/mL)') +
-      scale_x_continuous(limits = c(max(DOSEdata$time), max(DOSEdata_future$time)))+
+      #scale_x_continuous(limits = c(max(DOSEdata$time), max(DOSEdata_future$time)))+
       theme_bw()
     cyclosporine_dose_adjustment_plot
     return(cyclosporine_dose_adjustment_plot)
-  })
-  
+  }, res = 100)
   
   # end ----  
 })
